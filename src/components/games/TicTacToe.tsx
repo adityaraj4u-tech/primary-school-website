@@ -95,6 +95,7 @@ export function TicTacToe() {
   const [thinking, setThinking] = useState(false);
 
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextRoundTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scoredKey = useRef<string | null>(null);
 
   const { winner, line } = useMemo(() => getWinner(board), [board]);
@@ -102,8 +103,8 @@ export function TicTacToe() {
   const gameOver = !!winner || draw;
 
   const status = useMemo(() => {
-    if (winner) return `${winner} wins!`;
-    if (draw) return "It's a draw";
+    if (winner) return `${winner} wins! Next round…`;
+    if (draw) return "It's a draw. Next round…";
     if (mode === "ai" && turn === "O") return "AI is thinking…";
     return `${turn}'s turn`;
   }, [winner, draw, turn, mode]);
@@ -132,6 +133,34 @@ export function TicTacToe() {
       return { ...s, draws: s.draws + 1 };
     });
   }, [gameOver, winner, board]);
+
+  // Auto-start next round after win or full board (draw)
+  useEffect(() => {
+    if (nextRoundTimer.current) {
+      clearTimeout(nextRoundTimer.current);
+      nextRoundTimer.current = null;
+    }
+    if (!gameOver) return;
+
+    nextRoundTimer.current = setTimeout(() => {
+      if (aiTimer.current) {
+        clearTimeout(aiTimer.current);
+        aiTimer.current = null;
+      }
+      scoredKey.current = null;
+      setThinking(false);
+      setBoard(emptyBoard());
+      setTurn("X");
+      nextRoundTimer.current = null;
+    }, 1600);
+
+    return () => {
+      if (nextRoundTimer.current) {
+        clearTimeout(nextRoundTimer.current);
+        nextRoundTimer.current = null;
+      }
+    };
+  }, [gameOver, board]);
 
   useEffect(() => {
     if (aiTimer.current) {
@@ -174,6 +203,10 @@ export function TicTacToe() {
     if (aiTimer.current) {
       clearTimeout(aiTimer.current);
       aiTimer.current = null;
+    }
+    if (nextRoundTimer.current) {
+      clearTimeout(nextRoundTimer.current);
+      nextRoundTimer.current = null;
     }
     scoredKey.current = null;
     setThinking(false);
