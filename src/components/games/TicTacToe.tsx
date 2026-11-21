@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Cell = "X" | "O" | null;
 type Board = Cell[];
@@ -54,25 +54,22 @@ function minimax(board: Board, isMax: boolean): number {
       best = Math.max(best, minimax(next, false));
     }
     return best;
-  } else {
-    let best = Infinity;
-    for (const m of moves) {
-      const next = [...board];
-      next[m] = "X";
-      best = Math.min(best, minimax(next, true));
-    }
-    return best;
   }
+  let best = Infinity;
+  for (const m of moves) {
+    const next = [...board];
+    next[m] = "X";
+    best = Math.min(best, minimax(next, true));
+  }
+  return best;
 }
 
 function bestAiMove(board: Board, difficulty: Difficulty): number {
   const moves = availableMoves(board);
   if (moves.length === 0) return -1;
 
-  if (difficulty === "easy") {
-    if (Math.random() < 0.7) {
-      return moves[Math.floor(Math.random() * moves.length)];
-    }
+  if (difficulty === "easy" && Math.random() < 0.7) {
+    return moves[Math.floor(Math.random() * moves.length)];
   }
 
   let bestScore = -Infinity;
@@ -95,7 +92,10 @@ export function TicTacToe() {
   const [mode, setMode] = useState<Mode>("ai");
   const [difficulty, setDifficulty] = useState<Difficulty>("hard");
   const [scores, setScores] = useState({ X: 0, O: 0, draws: 0 });
-  const [locked, setLocked] = useState(false);
+  const [thinking, setThinking] = useState(false);
+
+  const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scoredKey = useRef<string | null>(null);
 
   const { winner, line } = useMemo(() => getWinner(board), [board]);
   const draw = useMemo(() => isDraw(board), [board]);
@@ -119,37 +119,66 @@ export function TicTacToe() {
   }, []);
 
   useEffect(() => {
-    if (!gameOver) return;
+    if (!gameOver) {
+      scoredKey.current = null;
+      return;
+    }
+    const key = board.join(",") + (winner ?? "D");
+    if (scoredKey.current === key) return;
+    scoredKey.current = key;
     setScores((s) => {
       if (winner === "X") return { ...s, X: s.X + 1 };
       if (winner === "O") return { ...s, O: s.O + 1 };
-      if (draw) return { ...s, draws: s.draws + 1 };
-      return s;
+      return { ...s, draws: s.draws + 1 };
     });
-  }, [gameOver, winner, draw]);
+  }, [gameOver, winner, board]);
 
   useEffect(() => {
-    if (mode !== "ai" || turn !== "O" || gameOver || locked) return;
-    setLocked(true);
-    const delay = difficulty === "hard" ? 380 : 280;
-    const t = setTimeout(() => {
-      const move = bestAiMove(board, difficulty);
+    if (aiTimer.current) {
+      clearTimeout(aiTimer.current);
+      aiTimer.current = null;
+    }
+
+    if (mode !== "ai" || turn !== "O" || gameOver) {
+      setThinking(false);
+      return;
+    }
+
+    setThinking(true);
+    const delay = difficulty === "hard" ? 400 : 280;
+    const snapshot = board;
+    const diff = difficulty;
+
+    aiTimer.current = setTimeout(() => {
+      const move = bestAiMove(snapshot, diff);
       if (move >= 0) applyMove(move, "O");
-      setLocked(false);
+      setThinking(false);
+      aiTimer.current = null;
     }, delay);
-    return () => clearTimeout(t);
-  }, [mode, turn, board, gameOver, locked, difficulty, applyMove]);
+
+    return () => {
+      if (aiTimer.current) {
+        clearTimeout(aiTimer.current);
+        aiTimer.current = null;
+      }
+    };
+  }, [mode, turn, board, gameOver, difficulty, applyMove]);
 
   function handleCell(index: number) {
-    if (gameOver || board[index] || locked) return;
+    if (gameOver || board[index] || thinking) return;
     if (mode === "ai" && turn !== "X") return;
     applyMove(index, turn);
   }
 
   function resetBoard() {
+    if (aiTimer.current) {
+      clearTimeout(aiTimer.current);
+      aiTimer.current = null;
+    }
+    scoredKey.current = null;
+    setThinking(false);
     setBoard(emptyBoard());
     setTurn("X");
-    setLocked(false);
   }
 
   function resetAll() {
@@ -248,14 +277,20 @@ export function TicTacToe() {
               type="button"
               role="gridcell"
               onClick={() => handleCell(i)}
-              disabled={!!cell || gameOver || (mode === "ai" && turn === "O")}
+              disabled={
+                !!cell || gameOver || thinking || (mode === "ai" && turn === "O")
+              }
               aria-label={cell ? `Cell ${i + 1}, ${cell}` : `Empty cell ${i + 1}`}
               className={`
                 aspect-square rounded-xl text-4xl sm:text-5xl font-bold
                 flex items-center justify-center transition
                 disabled:cursor-default
-                ${isWinCell ? "bg-green-400/90 text-white scale-[1.02]" : "bg-white hover:bg-slate-50 active:scale-[0.98]"}
-                ${!cell && !gameOver ? "cursor-pointer" : ""}
+                ${
+                  isWinCell
+                    ? "bg-green-400/90 text-white scale-[1.02]"
+                    : "bg-white hover:bg-slate-50 active:scale-[0.98]"
+                }
+                ${!cell && !gameOver && !thinking ? "cursor-pointer" : ""}
               `}
             >
               {cell === "X" && (
