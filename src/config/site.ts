@@ -1,6 +1,5 @@
 /**
  * Single source of truth for school identity and feature flags.
- * Replace "YOUR SCHOOL" and all placeholders once the school supplies verified data.
  */
 
 export type VerifiedFlag = {
@@ -69,9 +68,11 @@ export const siteConfig = {
     management: false,
   } as Record<string, boolean>,
 
-  url: process.env.NEXT_PUBLIC_SITE_URL || "https://primary-school-website-aditya-raj3.vercel.app",
+  url:
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://primary-school-website-aditya-raj3.vercel.app",
   locale: "en_IN",
-} as const;
+};
 
 export type SiteConfig = typeof siteConfig;
 
